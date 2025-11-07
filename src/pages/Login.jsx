@@ -1,0 +1,500 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
+import React from "react";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+import axios from "axios";
+import config from '../config/config';
+import env from '../config/env';
+import PhoneCollectionModal from '../components/PhoneCollectionModal'; 
+
+
+
+
+
+const Login = () => {
+  const navigate = useNavigate();
+  const { login, error: contextError, setUserFromGoogle } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    identifier: '',
+    password: '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+
+  
+const handleSuccess = async (credentialResponse) => {
+  const token = credentialResponse.credential;
+  
+  try {
+    setIsGoogleLoading(true);
+    setError('');
+    
+    const res = await axios.post(
+      `${config.API_BASE_URL}/api/auth/google`,
+      { token }
+    );
+    
+    console.log("Google Auth Response:", res.data);
+    console.log("User data from response:", res.data.user);
+    console.log("Phone:", res.data.user?.phone);
+    console.log("Address:", res.data.user?.address);
+    
+    if (res.data && res.data.user) {
+      // Use the AuthContext function to set user state
+      setUserFromGoogle(res.data.user, res.data.token);
+      
+      // Show success toast
+      toast.success('Welcome! Logged in with Google');
+      
+      // Check if user needs to complete profile (missing phone or address)
+      const userData = res.data.user;
+      console.log('Checking profile completion for user:', userData);
+      
+      // For now, disable phone collection modal - users can add phone later in account settings
+      const needsProfileCompletion = false; // Disabled phone collection modal
+      
+      console.log('Profile completion check disabled - redirecting to home');
+      
+      // Always navigate to home page after Google login
+      navigate('/');
+      
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } else {
+      throw new Error('Invalid response from server');
+    }
+  } catch (err) {
+    console.error("Google Login Error:", err);
+    setError(err.response?.data?.message || 'Google login failed. Please try again.');
+    toast.error('Google login failed. Please try again.');
+  } finally {
+    setIsGoogleLoading(false);
+  }
+};
+
+// Handle phone number submission
+const handlePhoneSubmit = async (phoneNumber) => {
+  try {
+    const response = await axios.put(
+      `${config.API_BASE_URL}/api/auth/update-profile`,
+      { phone: phoneNumber },
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (response.data) {
+      // Update user in context
+      const updatedUser = { ...currentUser, phone: phoneNumber };
+      setUserFromGoogle(updatedUser, localStorage.getItem('token'));
+      setCurrentUser(updatedUser);
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Phone update error:', error);
+    throw error;
+  }
+};
+
+// Handle phone modal close
+const handlePhoneModalClose = () => {
+  setShowPhoneModal(false);
+  setCurrentUser(null);
+  // Navigate to home page
+  navigate('/');
+  // Small delay to ensure state is updated
+  setTimeout(() => {
+    window.location.reload();
+  }, 500);
+};
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    
+    // Add '91' prefix if identifier is a 10-digit phone number
+    let identifier = formData.identifier;
+    if (/^\d{10}$/.test(identifier)) {
+      identifier = '91' + identifier;
+    }
+    const loginData = { ...formData, identifier };
+    try {
+      await login(loginData);
+      toast.success('Welcome back!');
+      navigate('/');
+      window.location.reload();
+    } catch (err) {
+      setError(err.message || contextError || 'Failed to login');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Left Side - Form */}
+      <motion.div 
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full lg:w-1/2 flex items-start lg:items-center justify-center px-4 sm:px-6 lg:px-8 pt-8 lg:pt-0"
+      >
+        <div className="max-w-md w-full space-y-8">
+          <div>
+            <h2 className="text-4xl font-light tracking-tight text-gray-900">
+              Welcome <span className="font-serif italic">Back</span>
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Don't have an account?{' '}
+              <Link to="/signup" className="font-medium text-primary hover:text-primary-dark">
+                Sign up
+              </Link>
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+              <span className="block sm:inline">{error}</span>
+            </div>
+          )}
+
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
+                  Email or Phone
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="identifier"
+                    name="identifier"
+                    type="text"
+                    autoComplete="username"
+                    required
+                    value={formData.identifier}
+                    onChange={handleChange}
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+                    placeholder="Enter your email or phone number"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200"
+                    placeholder="Enter your password"
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+                  Remember me
+                </label>
+              </div>
+
+              <div className="text-sm">
+                <Link to="/forgot-password" className="font-medium text-primary hover:text-primary-dark">
+                  Forgot your password?
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-white overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ 
+                  backgroundImage: 'url(/footer.png)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                }}
+              >
+                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors duration-300"></div>
+                <span className="absolute left-0 inset-y-0 flex items-center pl-3 z-10">
+                  <Lock className="h-5 w-5 text-white/80 group-hover:text-white" />
+                </span>
+                <span className="relative z-10">
+                  {isLoading ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Signing in...
+                    </span>
+                  ) : (
+                    'Sign in'
+                  )}
+                </span>
+              </button>
+              <GoogleOAuthProvider clientId={env.GOOGLE.CLIENT_ID}>
+        <div className="mt-6">
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-3 bg-white text-gray-500 font-medium">Or continue with</span>
+            </div>
+          </div>
+          
+          {/* Official Google Login Button */}
+          <div className="mt-6">
+            <div className="google-official-container">
+              {isGoogleLoading ? (
+                <div className="w-full flex items-center justify-center px-6 py-4 bg-white border border-gray-300 rounded-full shadow-sm">
+                  <div className="flex items-center space-x-3">
+                    <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-black font-semibold text-sm">Signing in with Google...</span>
+                  </div>
+                </div>
+              ) : (
+                <GoogleLogin 
+                  onSuccess={handleSuccess} 
+                  onError={() => {
+                    setError('Google login failed. Please try again.');
+                    toast.error('Google login failed. Please try again.');
+                  }}
+                  theme="outline"
+                  size="large"
+                  text="signin_with"
+                  shape="rectangular"
+                  logo_alignment="left"
+                  width="100%"
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    borderRadius: '32px',
+                    border: '1px solid #dadce0',
+                    backgroundColor: 'white',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    fontFamily: 'Roboto, Arial, sans-serif',
+                    color: '#000000',
+                    transition: 'all 0.2s ease',
+                    boxShadow: 'none',
+                    padding: '0 16px',
+                    outline: 'none',
+                    textDecoration: 'none'
+                  }}
+                  className="google-official-button"
+                />
+              )}
+            </div>
+          </div>
+          
+          {/* Additional Info */}
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-500">
+              Secure login with your Google account
+            </p>
+          </div>
+        </div>
+    </GoogleOAuthProvider>
+            </div>
+          </form>
+
+        </div>
+      </motion.div>
+
+      {/* Mobile Content Section */}
+      <div className="lg:hidden w-full bg-gray-50 py-12 px-4">
+        <div className="max-w-md mx-auto">
+          <h3 className="text-2xl font-semibold text-gray-900 text-center mb-8">
+            Why Choose Our Heritage Shop?
+          </h3>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h4 className="font-medium text-gray-900 mb-1">Reliable</h4>
+              <p className="text-sm text-gray-600">Trusted service for years</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h4 className="font-medium text-gray-900 mb-1">Safe</h4>
+              <p className="text-sm text-gray-600">Secure transactions</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h4 className="font-medium text-gray-900 mb-1">Fast</h4>
+              <p className="text-sm text-gray-600">Variety of items</p>
+            </div>
+            <div className="text-center">
+              <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h4 className="font-medium text-gray-900 mb-1">Fair</h4>
+              <p className="text-sm text-gray-600">Best value for items</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side - Image */}
+<motion.div 
+  initial={{ opacity: 0, x: 20 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ duration: 0.5, delay: 0.2 }}
+  className="hidden lg:block lg:w-1/2 relative"
+>
+  <img src="/footer.png" alt="Signup Banner" className="absolute inset-0 w-full h-full object-cover" />
+  <div className="absolute inset-0 bg-black/50" />
+  <div className="absolute inset-0 flex items-center justify-center p-12">
+    <div className="text-white text-center">
+      <h2 className="text-4xl font-light mb-6">
+        Unlock a World of <span className="font-serif italic">Unique Finds</span>
+      </h2>
+      <p className="text-lg text-gray-100 mb-8">
+        Join our community to buy, sell, and discover one-of-a-kind items.
+      </p>
+      <div className="space-y-4 text-left max-w-md mx-auto">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Curated collections from trusted sellers</span>
+        </div>
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Secure transactions and buyer protection</span>
+        </div>
+
+        {/* New Premium Features */}
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Authentic <span className="italic">Dhokra Art</span> from master artisans</span>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Exquisite <span className="italic">Heritage Products</span> with timeless appeal</span>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Finely crafted <span className="italic">Art & Craft</span> for discerning tastes</span>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <span>Exclusive <span className="italic">Artisan Program</span> for passionate creators</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</motion.div>
+
+    {/* Phone Collection Modal */}
+    <PhoneCollectionModal
+      isOpen={showPhoneModal}
+      onClose={handlePhoneModalClose}
+      onPhoneSubmit={handlePhoneSubmit}
+    />
+
+    </div>
+  );
+};
+
+export default Login;

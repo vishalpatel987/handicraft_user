@@ -1,0 +1,243 @@
+import { Link } from 'react-router-dom';
+import { ShoppingBag, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
+import { useState, useEffect } from 'react';
+import config from '../../config/config.js';
+import { toast } from 'react-hot-toast';
+import userActivityService from '../../services/userActivityService';
+
+const ProductCard = ({ product }) => {
+  const { addToCart, cartItems } = useCart();
+  const { toggleWishlist, isInWishlist } = useWishlist();
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  const isOutOfStock = product.stock === 0 || product.outOfStock === true || product.inStock === false;
+  const cartQuantity = cartItems?.find(item => (item.product?._id || item.product?.id || item.id) === (product._id || product.id))?.quantity || 0;
+  const isCartLimit = cartQuantity >= (product.stock || 0);
+
+  const handleAddToCart = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isOutOfStock) {
+      toast.error('Product is out of stock');
+      return;
+    }
+    if (isCartLimit) {
+      toast.error('Cannot add more than available stock');
+      return;
+    }
+    try {
+      const productId = product._id || product.id;
+      if (!productId) {
+        console.error('Product ID is missing');
+        toast.error('Failed to add item to cart');
+        return;
+      }
+      await addToCart(productId);
+      
+      // Track add to cart activity
+      userActivityService.trackAddToCart(
+        productId, 
+        product.name, 
+        product.category
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast.error('Failed to add item to cart');
+    }
+  };
+
+  const handleWishlistToggle = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const productId = product._id || product.id;
+      if (!productId) {
+        console.error('Product ID is missing');
+        toast.error('Failed to update wishlist');
+        return;
+      }
+      await toggleWishlist(productId);
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+    }
+  };
+
+  const hasOptions = product.attributes && product.attributes.length > 0;
+
+  const validImages = (product.images && Array.isArray(product.images))
+    ? product.images.filter(img => {
+        if (!img || typeof img !== 'string') return false;
+        const ext = img.toLowerCase().split('.').pop();
+        return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+      })
+    : [];
+  
+  const mainImage = validImages.length > 0 ? config.fixImageUrl(validImages[currentImageIndex]) : config.fixImageUrl(product.image);
+
+  const handlePreviousImage = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCurrentImageIndex(prev => prev === 0 ? validImages.length - 1 : prev - 1);
+  };
+
+  const handleNextImage = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCurrentImageIndex(prev => prev === validImages.length - 1 ? 0 : prev + 1);
+  };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (validImages.length <= 1) return;
+      
+      if (e.key === 'ArrowLeft') {
+        setCurrentImageIndex(prev => prev === 0 ? validImages.length - 1 : prev - 1);
+      } else if (e.key === 'ArrowRight') {
+        setCurrentImageIndex(prev => prev === validImages.length - 1 ? 0 : prev + 1);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [validImages.length]);
+
+  return (
+    <div className="group relative bg-white rounded-xl overflow-hidden transition-all duration-300 ease-in-out hover:shadow-lg hover:-translate-y-1">
+      <Link 
+        to={`/product/${product._id || product.id}`} 
+        className="block"
+        onClick={() => {
+          // Track product view
+          userActivityService.trackProductView(product._id || product.id, product.name);
+        }}
+      >
+        <div className="relative aspect-[4/3.5] w-full overflow-hidden bg-gray-50">
+          <img
+            src={mainImage}
+            alt={product.name}
+            className="w-full h-full object-cover object-center transition-transform duration-300 ease-in-out group-hover:scale-105"
+            onError={e => {
+              e.target.onerror = null;
+              e.target.src = 'https://placehold.co/400x500/e2e8f0/475569?text=Image';
+            }}
+          />
+          
+          {/* Navigation Arrows - Only show if there are multiple images */}
+          {validImages.length > 1 && (
+            <>
+              {/* More Images Indicator */}
+              <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {validImages.length} photos
+              </div>
+              
+              <button
+                onClick={handlePreviousImage}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/80 hover:bg-white text-[#8f3a61] rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-200 opacity-0 group-hover:opacity-100 hover:scale-110"
+                aria-label="Previous image"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={handleNextImage}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/80 hover:bg-white text-[#8f3a61] rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-200 opacity-0 group-hover:opacity-100 hover:scale-110"
+                aria-label="Next image"
+              >
+                <ChevronRight size={16} />
+              </button>
+              
+          
+              
+              {/* Thumbnail Dots */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-1 mt-8">
+                {validImages.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCurrentImageIndex(index);
+                    }}
+                    className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                      index === currentImageIndex 
+                        ? 'bg-white scale-125' 
+                        : 'bg-white/50 hover:bg-white/75'
+                    }`}
+                    aria-label={`Go to image ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+          
+          {/* Wishlist Heart Button */}
+          <button
+            onClick={handleWishlistToggle}
+            className="absolute top-2 right-2 w-8 h-8 bg-white/90 hover:bg-white rounded-full flex items-center justify-center shadow-md backdrop-blur-sm transition-all duration-200 z-10 group/heart"
+            aria-label={isInWishlist(product._id || product.id) ? "Remove from wishlist" : "Add to wishlist"}
+          >
+            <Heart 
+              size={16} 
+              className={`transition-all duration-200 ${
+                isInWishlist(product._id || product.id) 
+                  ? 'fill-red-500 text-red-500' 
+                  : 'text-gray-600 group-hover/heart:text-red-500'
+              }`}
+            />
+          </button>
+         
+          {product.regularPrice && product.regularPrice > product.price && (
+            <div className="absolute top-1.5 left-1.5 bg-[#8f3a61] text-white px-1.5 py-0.5 rounded-md text-xs font-semibold">
+              -{Math.round(((product.regularPrice - product.price) / product.regularPrice) * 100)}%
+            </div>
+          )}
+        </div>
+
+        <div className="p-2.5 space-y-1 text-center">
+          <h3 className="text-sm font-semibold text-gray-800 truncate group-hover:text-pink-600 transition-colors leading-tight">
+            {product.name}
+          </h3>
+          <p className="text-xs text-gray-500 leading-tight">{product.categoryName || product.category}</p>
+          <div className="flex items-baseline justify-center gap-1.5 pt-0.5">
+            <span className="text-base font-bold text-[#8f3a61]">
+              ₹{Math.round(product.price)}
+            </span>
+            {product.regularPrice && product.regularPrice > product.price && (
+              <span className="text-xs text-gray-400 line-through">
+                ₹{Math.round(product.regularPrice)}
+              </span>
+            )}
+          </div>
+        </div>
+      </Link>
+
+      <div className="px-2.5 pb-2.5">
+        {hasOptions ? (
+          <Link
+            to={`/product/${product._id || product.id}`}
+            className="w-full bg-[#8f3a61] text-white font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#8f3a61]/90 transition-all duration-300 ease-in-out text-xs"
+          >
+            Select options
+          </Link>
+        ) : (
+          <button
+            onClick={handleAddToCart}
+            className={`w-full font-semibold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all duration-300 ease-in-out text-xs ${
+              isOutOfStock || isCartLimit
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-[#8f3a61] text-white hover:bg-[#8f3a61]/90'
+            }`}
+            disabled={isOutOfStock || isCartLimit}
+          >
+            <ShoppingBag className="w-3.5 h-3.5" />
+            {isOutOfStock ? 'Out of Stock' : isCartLimit ? 'Max Stock' : 'Add to cart'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ProductCard; 

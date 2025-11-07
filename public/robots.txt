@@ -1,0 +1,116 @@
+# Riko Craft - Robots.txt
+# Optimized for search engine crawling and indexing
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://rikocraft.com/sitemap.xml
+
+# Allow important pages and content
+Allow: /shop
+Allow: /about
+Allow: /contact
+Allow: /policies
+Allow: /seller
+Allow: /product/
+Allow: /login
+Allow: /signup
+Allow: /forgot-password
+
+# Allow static assets for better indexing
+Allow: /logo.png
+Allow: /images/
+Allow: /public/
+Allow: /*.css
+Allow: /*.js
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.jpeg
+Allow: /*.gif
+Allow: /*.webp
+Allow: /*.svg
+
+# Disallow admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
+Disallow: /checkout/
+Disallow: /cart/
+Disallow: /account/
+Disallow: /wishlist/
+Disallow: /order-confirmation/
+Disallow: /payment/
+Disallow: /seller/auth
+Disallow: /seller/profile
+
+# Disallow temporary and development files
+Disallow: /temp/
+Disallow: /tmp/
+Disallow: /test/
+Disallow: /dev/
+Disallow: /*.log
+Disallow: /*.bak
+Disallow: /*.old
+
+# Disallow search and filter parameters that create duplicate content
+Disallow: /*?*
+Disallow: /*&*
+Disallow: /shop?*
+Disallow: /product/*?*
+
+# Allow specific query parameters that are important
+Allow: /shop?category=*
+Allow: /shop?seller=*
+Allow: /product/*?seller=*
+
+# Crawl delay for respectful crawling
+Crawl-delay: 1
+
+# Additional directives for major search engines
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Slurp
+Allow: /
+Crawl-delay: 1
+
+User-agent: DuckDuckBot
+Allow: /
+Crawl-delay: 1
+
+
+
+# Block social media bots that might cause issues
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+# Block aggressive scrapers
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: dotbot
+Disallow: /
+
+User-agent: rogerbot
+Disallow: /
+
+User-agent: Screaming Frog SEO Spider
+Disallow: / 
